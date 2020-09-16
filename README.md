@@ -85,7 +85,7 @@ ansible-playbook wordpress.yml
 
 ## 🤝 Contributing
 
-Contributions, issues and feature requests are welcome!<br />Feel free to check [issues page](https://github.com/ffeyen/wordpress-ansible/issues).
+Contributions, issues and feature requests are welcome!<br />Feel free to check [issues page](https://github.com/virtUOS/ansible-wordpress-centos8/issues).
 
 ## Show your support
 
