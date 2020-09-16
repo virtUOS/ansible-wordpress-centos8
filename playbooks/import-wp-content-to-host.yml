@@ -1,0 +1,24 @@
+---
+- hosts: all
+  tasks:
+  # SET THE FILE NAME AND PATH YOU WANT TO IMPORT
+  - name: set dp dumb filename
+    set_fact: 
+      wp_content_filename: "WP_CONTENT_FILE_NAME"
+      wp_content_path: "/tmp/ansible-wordpress"
+
+  - name: copy wp-content archive from local to remote host
+    copy: 
+      src: "{{ wp_content_path }}/{{ wp_content_filename }}"
+      dest: /tmp/
+      remote_src: no
+      force: no
+
+  - name: unarchive wp-content directory
+    become: yes
+    unarchive:
+      src: /tmp/{{ wp_content_filename }}
+      dest: /var/www/wordpress/
+      owner: nginx
+      group: nginx
+      remote_src: yes

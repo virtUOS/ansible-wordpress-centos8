@@ -1,0 +1,47 @@
+<?php
+@ini_set('session.cookie_httponly', true);
+@ini_set('session.cookie_secure', true);
+@ini_set('session.use_only_cookies', true);
+
+define( 'WP_MEMORY_LIMIT', '96M' );
+define( 'WP_MAX_MEMORY_LIMIT', '256M' );
+define( 'WP_CACHE', true );
+
+define('DB_NAME', '{{ db_name }}');
+define('DB_USER', '{{ db_user }}');
+define('DB_PASSWORD', '{{ hosts_vault[inventory_hostname].db_password }}');
+define('DB_HOST', 'localhost');
+define('DB_CHARSET', 'utf8');
+define('DB_COLLATE', '');
+
+{% if salt_file.stat.exists %}
+include ( ABSPATH . 'wp-salts.php' );
+{% endif %}
+
+define('FS_METHOD','direct');
+
+$table_prefix  = '{{ db_prefix }}';
+if ( !defined('ABSPATH') )
+        define('ABSPATH', dirname(__FILE__) . '/');
+require_once(ABSPATH . 'wp-settings.php');
+
+define( 'WP_DEBUG', false );
+if ( WP_DEBUG ) {
+    define( 'WP_DEBUG_LOG', true );
+    define( 'WP_DEBUG_DISPLAY', false );
+    @ini_set( 'display_errors', 0 );
+    @ini_set('log_errors', 'On');
+    error_reporting(E_ALL);
+}
+
+{% if hosts_vault[inventory_hostname].wordpress_mail is defined %}
+define( 'SMTP_USER', '{{ hosts_vault[inventory_hostname].wordpress_mail.smtp_user }}' );
+define( 'SMTP_PASS', '{{ hosts_vault[inventory_hostname].wordpress_mail.smtp_pass }}' );
+define( 'SMTP_HOST', '{{ hosts_vault[inventory_hostname].wordpress_mail.smtp_host }}' );
+define( 'SMTP_FROM', '{{ hosts_vault[inventory_hostname].wordpress_mail.smtp_from }}' );
+define( 'SMTP_NAME', '{{ hosts_vault[inventory_hostname].wordpress_mail.smtp_name }}' );
+define( 'SMTP_PORT', '{{ hosts_vault[inventory_hostname].wordpress_mail.smtp_port }}' );
+define( 'SMTP_SECURE', '{{ hosts_vault[inventory_hostname].wordpress_mail.smtp_secure }}' ); 
+define( 'SMTP_AUTH', {{ hosts_vault[inventory_hostname].wordpress_mail.smtp_auth }} );
+define( 'SMTP_DEBUG', {{ hosts_vault[inventory_hostname].wordpress_mail.smtp_debug }} );
+{% endif %}

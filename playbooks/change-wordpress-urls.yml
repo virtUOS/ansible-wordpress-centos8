@@ -1,0 +1,56 @@
+---
+- hosts: all
+  tasks:
+  - name: get current domain from db
+    command: >
+      mysql --user root --password={{ hosts_vault[inventory_hostname].db_password_root }} {{ db_name }} 
+      --execute="SELECT * FROM wp_options WHERE option_name = 'home' OR option_name = 'siteurl'"
+    register: db_query_siteurl
+
+  - name: filter current siteurl from database query via regex
+    set_fact:
+      siteurl_current: "{{ db_query_siteurl.stdout_lines[1] | regex_search('(http|https)://([\\w_-]+(?:(?:\\.[\\w_-]+)+))([\\w.,@?^=%&:/~+#-]*[\\w@?^=%&/~+#-])?') }}"
+
+  - name: filter protocol from current siteurl via regex
+    set_fact:
+      protocol: "{{ siteurl_current | regex_search('^https?')}}"
+
+  - name: set siteurl_new var
+    set_fact:
+      siteurl_new: "{{ protocol }}://{{ site_domain }}"
+
+  - debug:
+      msg: 
+        - "CURRENT_URL: {{ siteurl_current }}"
+        - "NEW_URL: {{ siteurl_new }}"
+
+  - name: check if current siteurl and new siteurl match (fail, if they already match)
+    set_fact:
+      siteurl_match: "{{ true if siteurl_current == siteurl_new else false }}"
+    register: match_out
+
+  - name: UPDATE wp_options WHERE option_name = 'home' OR option_name = 'siteurl'
+    command: >
+      mysql --user root --password={{ hosts_vault[inventory_hostname].db_password_root }} {{ db_name }} 
+      --execute="
+      UPDATE wp_options SET option_value = replace(option_value, '{{ siteurl_current }}', '{{ siteurl_new }}') 
+      WHERE option_name = 'home' OR option_name = 'siteurl';"
+    when: siteurl_match == false
+
+  - name: UPDATE wp_posts SET guid 
+    command: >
+      mysql --user root --password={{ hosts_vault[inventory_hostname].db_password_root }} {{ db_name }} 
+      --execute="UPDATE wp_posts SET guid = replace(guid, '{{ siteurl_current }}','{{ siteurl_new }}');"
+    when: siteurl_match == false
+
+  - name: UPDATE wp_posts SET post_content
+    command: >
+      mysql --user root --password={{ hosts_vault[inventory_hostname].db_password_root }} {{ db_name }} 
+      --execute="UPDATE wp_posts SET post_content = replace(post_content, '{{ siteurl_current }}', '{{ siteurl_new }}');"
+    when: siteurl_match == false
+
+  - name: UPDATE wp_postmeta SET meta_value
+    command: >
+      mysql --user root --password={{ hosts_vault[inventory_hostname].db_password_root }} {{ db_name }} 
+      --execute="UPDATE wp_postmeta SET meta_value = replace(meta_value,'{{ siteurl_current.split('//')[1] }}','{{ site_domain }}');"
+    when: siteurl_match == false

@@ -1,0 +1,35 @@
+---
+- name: fail early if os is not supported
+  assert:
+    that: ansible_distribution == 'CentOS' and ansible_distribution_major_version == '8'
+
+- name: set timezone to Europe/Berlin
+  timezone:
+    name: Europe/Berlin
+
+- name: ensure epel-repository is installed
+  package:
+    name: epel-release
+    state: present
+
+- name: selinux setsebool settings
+  seboolean:
+    name: "{{ item }}"
+    state: yes
+    persistent: yes
+  with_items:
+    - httpd_can_network_connect
+    - httpd_unified
+  when: ansible_selinux.status == "enabled"
+
+- name: selinux sefcontext settings
+  sefcontext:
+    target: "{{ item.target }}"
+    setype: "{{ item.setype }}"
+    state: present
+    reload: yes
+  with_items:
+    - { setype: httpd_sys_content_t, target: {{ wordpress_dir_install }}/wordpress }
+    - { setype: httpd_sys_rw_content_t, target: {{ wordpress_dir_install }}/wordpress/wp-config.php}
+    - { setype: httpd_sys_rw_content_t, target: {{ wordpress_dir_install }}/wordpress/wp-content}
+  when: ansible_selinux.status == "enabled"

@@ -1,0 +1,21 @@
+---
+- hosts: all
+  tasks:
+  - name: generate filename for dp dumb
+    set_fact: 
+      db_dump_filename: "wordpress-db_{{ site_domain }}_{{ ansible_date_time.date }}_{{ ansible_date_time.time }}.sql"
+  
+  - name: dump all databases to db_HOSTNAME_DATE_TIME.sql
+    mysql_db:
+      state: dump
+      name: "{{ db_name }}"
+      target: "/tmp/{{ db_dump_filename }}"
+      login_user: root
+      login_password: "{{ hosts_vault[inventory_hostname].db_password_root }}"
+
+  - name: fetch db dump from host to remote
+    fetch: 
+      src: "/tmp/{{ db_dump_filename }}"
+      dest: "/tmp/ansible-wordpress/{{ db_dump_filename }}"
+      remote_src: yes
+      flat: yes

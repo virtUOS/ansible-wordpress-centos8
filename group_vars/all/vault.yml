@@ -1,0 +1,18 @@
+---
+hosts_vault:
+  HOST1:
+    db_password: DB_PASSWORD # use strong generated password
+    db_password_root: DB_PASSWORD_ROOT # use strong generated password
+    wordpress_mail: # if defined, the mail config will be set in wp-config.php
+       smtp_user: SMTP_USER # smtp login
+       smtp_pass: SMTP_PASS 
+       smtp_host: SMTP_HOST # smtp server/host (e.g. mail.example.com)
+       smtp_from: SMTP_FROMT # email is send from MAIL (e.g. contact@example.com) 
+       smtp_name: SMTP_NAME # email is send from NAME (e.g. 'My example contact')
+       smtp_port: SMTP_PORT
+       smtp_secure: tls
+       smtp_auth: true
+       smtp_debug: 0 # choos 1 for debug mode
+  HOST2:
+    db_password: DB_PASSWORD # use strong generated password
+    db_password_root: DB_PASSWORD_ROOT # use strong generated password

@@ -1,0 +1,28 @@
+---
+- hosts: all
+  tasks:
+  # SET THE FILE NAME AND PATH YOU WANT TO IMPORT
+  - name: set dp dumb filename
+    set_fact: 
+      db_dump_filename: "DB_DUMP_FILE_NAME"
+      db_dump_path: "/tmp/ansible-wordpress"
+
+  - name: copy db dump from local to remote host
+    copy: 
+      src: "{{ db_dump_path }}/{{ db_dump_filename }}"
+      dest: /tmp/
+      remote_src: no
+
+  - name: import wordpress databases
+    mysql_db:
+      state: import
+      name: "{{ db_name }}"
+      target: "/tmp/{{ db_dump_filename }}"
+      login_user: root
+      login_password: "{{ hosts_vault[inventory_hostname].db_password_root }}"
+
+  - name: restart mariadb
+    become: yes
+    service:
+      name: mariadb
+      state: restarted

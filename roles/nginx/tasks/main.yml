@@ -1,0 +1,146 @@
+---
+- name: enable nginx repo
+  template:
+    src: nginx.repo.j2
+    dest: /etc/yum.repos.d/nginx.repo
+    owner: root
+    group: root
+    mode: 0644
+
+- name: ensure nginx is installed
+  dnf:
+    name: nginx
+    state: present
+    update_cache: yes
+
+- name: install deps
+  package:
+    name: "{{ item }}"
+    state: present
+    update_cache: yes
+  with_items:
+    - policycoreutils-python-utils
+    - gd
+    - php
+    - php-xml
+    - php-mysqlnd
+    - php-pdo
+    - php-gd
+    - php-mbstring
+    - php-fpm
+    - php-json
+
+- name: ensure php-fpm is running
+  service:
+    name: php-fpm
+    state: started
+    enabled: yes
+
+- name: config php-fpm www.conf
+  replace:
+    path: /etc/php-fpm.d/www.conf
+    regexp: "{{ item.regexp }}"
+    replace: "{{ item.line }}"
+  loop:
+    - {
+        regexp: "^listen = /run/php-fpm/www.sock$",
+        line: "listen = 127.0.0.1:9000",
+      }
+    - {
+        regexp: "^listen.allowed_clients = 127.0.0.1$",
+        line: ";listen.allowed_clients = 127.0.0.1",
+      }
+    - { regexp: "^user = apache$", line: "user = nginx" }
+    - { regexp: "^group = apache$", line: "group = nginx" }
+  notify: restart php-fpm
+
+- name: copy nginx configuration
+  become: yes
+  template:
+    src: nginx.conf.j2
+    dest: /etc/nginx/nginx.conf
+    owner: root
+    group: root
+    mode: 0644
+  notify: reload nginx
+
+- name: create nginx folders
+  become: yes
+  file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
+    mode: "{{ item.mode }}"
+    recurse: yes
+  with_items:
+    - {
+        path: "/etc/nginx/sites-enabled",
+        owner: "root",
+        group: "root",
+        mode: "0744",
+      }
+    - {
+        path: "/etc/nginx/sites-available",
+        owner: "root",
+        group: "root",
+        mode: "0744",
+      }
+  notify: reload nginx
+
+- name: remove existing nginx vhosts config
+  become: yes
+  file:
+    path: "{{ item }}"
+    state: absent
+  with_items:
+    - "/etc/nginx/sites-enabled/*"
+    - "/etc/nginx/sites-available/*"
+
+- name: copy nginx vhost configuration
+  template:
+    src: vhost.conf.j2
+    dest: "/etc/nginx/sites-available/{{ site_domain }}.conf"
+    mode: 0644
+  notify: reload nginx
+
+- name: get a list of all vhosts (for symlink creation)
+  find:
+    paths: /etc/nginx/sites-available
+    patterns: "*.conf"
+    file_type: file
+  register: find
+
+- name: apply symlinks in sites-enabled
+  file:
+    dest: /etc/nginx/sites-enabled/{{ item.path | basename }}
+    src: "{{ item.path }}"
+    state: link
+    force: yes
+  with_items: "{{ find.files }}"
+  notify: reload nginx
+
+- name: ensure nginx service is enabled and running
+  service:
+    name: nginx
+    state: started
+    enabled: yes
+
+- name: enable and start firewalld
+  service:
+    name: firewalld
+    state: started
+    enabled: yes
+
+- name: allow services (firewalld)
+  firewalld:
+    service: "{{ item.name }}"
+    state: enabled
+    permanent: yes
+    immediate: yes
+    zone: "{{ item.zone }}"
+  with_items:
+    - { name: http, zone: public }
+    - { name: https, zone: public }
+    - { name: smtp, zone: public }
+  notify: reload firewall

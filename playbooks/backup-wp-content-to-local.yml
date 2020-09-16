@@ -1,0 +1,19 @@
+---
+  - hosts: all
+    tasks:
+    - name: generate filename for wp-content file
+      set_fact: 
+        wp_content_filename: "wp-content_{{ site_domain }}_{{ ansible_date_time.date }}_{{ ansible_date_time.time }}.gz"
+    
+    - name: archive wp-content directory
+      archive:
+        path: /var/www/wordpress/wp-content
+        dest: /tmp/{{ wp_content_filename }}
+        format: gz
+  
+    - name: fetch wp-content archive from host to remote
+      fetch: 
+        src: "/tmp/{{ wp_content_filename }}"
+        dest: "/tmp/ansible-wordpress/{{ wp_content_filename }}"
+        remote_src: yes
+        flat: yes

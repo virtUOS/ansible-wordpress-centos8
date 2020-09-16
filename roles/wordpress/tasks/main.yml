@@ -1,0 +1,184 @@
+---
+- name: check if nginx is installed
+  stat:
+    path: /usr/lib/systemd/system/nginx.service
+  register: wordpress_nginx_status
+  failed_when: not wordpress_nginx_status.stat.exists
+
+- name: check if mariadb is installed
+  stat:
+    path: /usr/lib/systemd/system/mariadb.service
+  register: wordpress_mariadb_status
+  failed_when: not wordpress_mariadb_status.stat.exists
+
+- name: check if wordpress is already installed (wordpress/index.php exists)
+  stat:
+    path: /var/www/wordpress/index.php
+  register: wordpress_installed
+
+- name: install wordpress deps
+  package:
+    name: "{{ item }}"
+    state: installed
+  with_items:
+    - unzip
+    - tar
+
+- name: download wordpress latest
+  get_url:
+    url: "{{ wordpress_package_url }}{{ wordpress_package_name }}"
+    dest: "/tmp/{{ wordpress_package_name }}"
+    force: no
+  when: not wordpress_installed.stat.exists
+  notify: reload nginx
+
+- name: extract wordpress archive
+  unarchive:
+    src: "/tmp/{{ wordpress_package_name }}"
+    dest: "{{ wordpress_dir_install }}"
+    remote_src: yes
+  when: not wordpress_installed.stat.exists
+  notify: reload nginx
+
+- name: check if salt is already present
+  stat:
+    path: /var/www/wordpress/wp-salts.php
+  register: salt_file
+
+- name: get API information for wp-salts
+  uri:
+    url: "https://api.wordpress.org/secret-key/1.1/salt/"
+    return_content: True
+    method: GET
+  register: wordpress_api_info
+  when: not salt_file.stat.exists
+  notify: reload nginx
+
+- name: copy wp-salts.php file in wordpress directory
+  template:
+    src: wp-salts.php.j2
+    dest: /var/www/wordpress/wp-salts.php
+    force: yes
+  when: not salt_file.stat.exists
+  notify: reload nginx
+
+- name: check if salt is present after template copy
+  stat:
+    path: /var/www/wordpress/wp-salts.php
+  register: salt_file
+
+- name: copy wordpress config file
+  template:
+    src: wp-config.php.j2
+    dest: /var/www/wordpress/wp-config.php
+    force: yes
+  notify: reload nginx
+
+- name: remove pre-installed plugins
+  file:
+    path: "{{ wordpress_dir_plugins }}/{{ item }}"
+    state: absent
+  with_items:
+    - hello.php
+    - akismet
+  when: not wordpress_installed.stat.exists
+
+- name: download wordpress plugins
+  get_url:
+    url: "https://downloads.wordpress.org/plugin/{{ item.name }}.zip"
+    dest: "/tmp/{{ item.name }}.zip"
+    force: no
+  with_items: "{{ wordpress_plugins }}"
+
+- name: unpack wordpress plugins
+  unarchive:
+    src: "/tmp/{{ item.name }}.zip"
+    dest: "{{ wordpress_dir_plugins }}"
+    creates: "{{ wordpress_dir_plugins }}/{{ item.name }}/"
+    copy: false
+  with_items: "{{ wordpress_plugins }}"
+
+- name: download wordpress theme
+  get_url:
+    url: "https://downloads.wordpress.org/theme/{{ item.name }}.{{ item.version }}.zip"
+    dest: "/tmp/{{ item.name }}.{{ item.version }}.zip"
+    force: no
+  with_items: "{{ wordpress_theme }}"
+
+- name: unpack wordpress theme
+  unarchive:
+    src: "/tmp/{{ item.name }}.{{ item.version }}.zip"
+    dest: "{{ wordpress_dir_themes }}"
+    creates: "{{ wordpress_dir_themes }}/{{ item.name }}/"
+    copy: false
+  with_items: "{{ wordpress_theme }}"
+
+- name: check if childtheme file is provided
+  set_fact:
+    child_theme_file_provided: True
+  when: hostvars[inventory_hostname].wordpress_theme[0].child_theme_file
+
+- name: copy child-theme to host
+  copy:
+    src: "{{ item.child_theme_file }}"
+    dest: "/tmp/{{ item.child_theme_file }}"
+  with_items: "{{ wordpress_theme }}"
+  when: child_theme_file_provided
+
+- name: extract child-theme if file exists
+  unarchive:
+    src: "/tmp/{{ item.child_theme_file }}"
+    dest: "{{ wordpress_dir_themes }}/"
+    remote_src: yes
+  with_items: "{{ wordpress_theme }}"
+  when: child_theme_file_provided
+
+- name: enable wordpress phpmailer with smtp settings in wp-config.php
+  blockinfile:
+    dest: "{% if child_theme_file_provided %}{{ wordpress_dir_themes }}/{{ hostvars[inventory_hostname].wordpress_theme[0].name }}-child/functions.php{% else %}{{ wordpress_dir_themes }}/{{ hostvars[inventory_hostname].wordpress_theme[0].name }}/functions.php{% endif %}"
+    state: present
+    insertafter: EOF
+    block: |
+      add_action( 'phpmailer_init', 'send_smtp_email' );
+      function send_smtp_email( $phpmailer ) {
+        $phpmailer->isSMTP();
+        $phpmailer->Host       = SMTP_HOST;
+        $phpmailer->SMTPAuth   = SMTP_AUTH;
+        $phpmailer->Port       = SMTP_PORT;
+        $phpmailer->Username   = SMTP_USER;
+        $phpmailer->Password   = SMTP_PASS;
+        $phpmailer->SMTPSecure = SMTP_SECURE;
+        $phpmailer->From       = SMTP_FROM;
+        $phpmailer->FromName   = SMTP_NAME;
+      }
+  when: hosts_vault[inventory_hostname].wordpress_mail is defined
+
+- name: set wordpress directory ownership to nginx:nginx
+  become: yes
+  file:
+    path: /var/www/wordpress
+    state: directory
+    owner: nginx
+    group: nginx
+    recurse: yes
+
+- name: ensure wordpress directories are 0755
+  command: find /var/www/wordpress -type d -exec chmod -c 0755 {} \;
+  register: chmod_result
+  changed_when: "chmod_result.stdout != \"\""
+
+- name: ensure wordpress files are 0644
+  command: find /var/www/wordpress -type f -exec chmod -c 0644 {} \;
+  register: chmod_result
+  changed_when: "chmod_result.stdout != \"\""
+
+- name: set wordpress secure ownership and permissions
+  become: yes
+  file:
+    path: "{{ item }}"
+    state: file
+    mode: "0440"
+  with_items:
+    - /var/www/wordpress/wp-config.php
+    - /var/www/wordpress/wp-salts.php
+  notify: reload nginx

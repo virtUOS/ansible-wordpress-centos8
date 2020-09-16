@@ -1,0 +1,14 @@
+---
+vault: "{{ hosts_vault }}"
+
+wordpress_package_url: "https://wordpress.org/"
+wordpress_package_name: "latest.tar.gz"
+wordpress_dir_install: "/var/www"
+wordpress_dir_plugins: "{{ wordpress_dir_install }}/wordpress/wp-content/plugins"
+wordpress_dir_themes: "{{ wordpress_dir_install }}/wordpress/wp-content/themes"
+
+db_name: wordpress_db
+db_prefix: "wp_"
+db_user: wordpress
+
+config_ssl: true # if set to true, Let's Encrypt certificates will be generated automatically
