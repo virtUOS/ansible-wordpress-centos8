@@ -12,6 +12,12 @@
     name: epel-release
     state: present
 
+- name: Install a list of packages (suitable replacement for 2.11 loop deprecation warning)
+  yum:
+    name:
+      - policycoreutils-python-utils
+    state: present
+
 - name: selinux setsebool settings
   seboolean:
     name: "{{ item }}"
