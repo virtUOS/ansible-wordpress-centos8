@@ -1,7 +1,7 @@
 ---
 - name: install certbot packages (Let's encrypt ssl certificates)
   dnf:
-    name: ['python3-certbot', 'python3-certbot-nginx']
+    name: ["python3-certbot", "python3-certbot-nginx"]
     state: latest
     update_cache: yes
   notify: reload nginx
@@ -26,7 +26,7 @@
 - name: add cron job for certbot renewal (if configured)
   cron:
     name: Certbot automatic renewal.
-    job: "certbot renew --quiet --no-self-upgrade"
+    job: "/usr/bin/certbot renew --quiet --no-self-upgrade"
     minute: "0"
     hour: "4"
     month: "*"
