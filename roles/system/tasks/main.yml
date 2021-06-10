@@ -12,6 +12,12 @@
     name: epel-release
     state: present
 
+- name: Install a list of packages (suitable replacement for 2.11 loop deprecation warning)
+  yum:
+    name:
+      - policycoreutils-python-utils
+    state: present
+
 - name: selinux setsebool settings
   seboolean:
     name: "{{ item }}"
@@ -29,7 +35,7 @@
     state: present
     reload: yes
   with_items:
-    - { setype: httpd_sys_content_t, target: {{ wordpress_dir_install }}/wordpress }
-    - { setype: httpd_sys_rw_content_t, target: {{ wordpress_dir_install }}/wordpress/wp-config.php}
-    - { setype: httpd_sys_rw_content_t, target: {{ wordpress_dir_install }}/wordpress/wp-content}
+    - { setype: httpd_sys_content_t, target: "{{ wordpress_dir_install }}/wordpress" }
+    - { setype: httpd_sys_rw_content_t, target: "{{ wordpress_dir_install }}/wordpress/wp-config.php" }
+    - { setype: httpd_sys_rw_content_t, target: "{{ wordpress_dir_install }}/wordpress/wp-content" }
   when: ansible_selinux.status == "enabled"
